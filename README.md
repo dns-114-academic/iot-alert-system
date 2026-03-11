@@ -1,6 +1,6 @@
 # IoT Embedded Alert System
 
-**Course project** | ENSIBS — Nov. 2025–Jan. 2026 | Lua, ESP32, LuaRTOS
+**Course project** | école d'ingénieurs — Nov. 2025–Jan. 2026 | Lua, ESP32, LuaRTOS
 
 ## Overview
 
