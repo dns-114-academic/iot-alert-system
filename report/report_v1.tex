@@ -1,0 +1,279 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[english]{babel}
+\usepackage{geometry}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{enumitem}
+
+
+\geometry{margin=2.5cm}
+
+\definecolor{codeblue}{RGB}{0,102,204}
+\definecolor{codegray}{RGB}{128,128,128}
+\definecolor{codegreen}{RGB}{0,140,0}
+\definecolor{codered}{RGB}{180,0,0}
+\definecolor{codebg}{RGB}{248,248,248}
+
+\lstset{
+  backgroundcolor=\color{codebg},
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{codeblue}\bfseries,
+  commentstyle=\color{codegreen}\itshape,
+  stringstyle=\color{codered},
+  numberstyle=\tiny\color{codegray},
+  numbers=left,
+  stepnumber=1,
+  frame=single,
+  rulecolor=\color{codegray},
+  breaklines=true,
+  captionpos=b,
+  tabsize=4,
+  showstringspaces=false
+}
+
+\lstdefinelanguage{Lua}{
+  keywords={and,break,do,else,elseif,end,false,for,function,if,in,
+            local,nil,not,or,repeat,return,then,true,until,while,
+            pcall,print,tostring},
+  morestring=[b]",
+  morestring=[b]',
+  morecomment=[l]{--},
+  morecomment=[s]{--[[}{]]},
+  sensitive=true
+}
+
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{\textit{IoT Seismograph — Report v1}}
+\rhead{\textit{O. Denis}}
+\cfoot{\thepage}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=codeblue,
+  urlcolor=codeblue,
+  citecolor=codeblue
+}
+
+\title{
+  \vspace{-1cm}
+  \textbf{\Large IoT Embedded Alert System} \\[0.4em]
+  \large Proof of Concept — Report \\[0.2em]
+  \normalsize ESP32 + Hall Sensor + Telegram Alert
+}
+\author{O. Denis \\ \small [University] — IoT Training Program}
+\date{2026}
+
+\begin{document}
+
+\maketitle
+\thispagestyle{fancy}
+\tableofcontents
+\vspace{1em}
+\hrule
+\vspace{1em}
+
+% -------------------------------------------------------------------
+\section{Project Identification}
+
+\subsection{Solution Name}
+\textbf{IoT Seismograph} — Real-time seismic detection system using a Hall-effect sensor and an oscillating magnet mounted on a mechanical pendulum, with instant alerting via Telegram Bot API.
+
+\subsection{Group}
+\begin{itemize}[noitemsep]
+  \item O. Denis
+\end{itemize}
+
+\subsection{Proposed Applications}
+\begin{enumerate}[noitemsep]
+  \item \textbf{Intelligent Seismic Detector (ISD)} — critical vibration monitoring
+  \item Door Opening Detector — building security / access audit
+  \item Vehicle Counter for Parking — smart access automation
+\end{enumerate}
+
+% -------------------------------------------------------------------
+\section{Context and Problem Statement}
+
+\subsection{Use Context}
+Target deployment: environments where undetected vibrations can cause hardware damage before any human intervention. Primary scenario: a data center where undetected micro-vibrations cause intermittent hard drive failures. Administrators only discover the issue after data loss. An early warning system enables intervention before hardware failure.
+
+Secondary scenarios:
+\begin{itemize}[noitemsep]
+  \item Hospital or laboratory (sensitive equipment protection)
+  \item Underground parking (heavy vehicle vibration detection)
+  \item Electrical substation
+\end{itemize}
+
+\subsection{General Objective}
+Demonstrate the feasibility of an autonomous, real-time, low-cost IoT system capable of detecting seismic events (P-waves ideally) with instant notification via a secure channel (Telegram Bot API).
+
+% -------------------------------------------------------------------
+\section{Solution Value}
+
+\subsection{Key Benefits}
+\begin{itemize}[noitemsep]
+  \item \textbf{Automatic detection}: zero manual intervention, 24/7 operation
+  \item \textbf{Real-time alert}: notification within 5 s via Telegram (WiFi)
+  \item \textbf{Low cost}: commodity hardware (ESP32 + KY-003 Hall sensor)
+  \item \textbf{Noise discrimination}: threshold-based filter separates genuine seismic patterns from electrical rebounds and industrial machines
+  \item \textbf{Resilience}: local serial output continues if WiFi is unavailable
+\end{itemize}
+
+\subsection{Alert Use Cases}
+\begin{enumerate}[noitemsep]
+  \item \textit{Major seismic alert} → urgent Telegram message, immediate response required
+  \item \textit{Moderate pre-alert} → informational notification, manual investigation
+  \item \textit{Vibration anomaly} → distinguishes isolated shock (noise) from sustained seismic event (duration $>$ 3 s)
+\end{enumerate}
+
+% -------------------------------------------------------------------
+\section{Hardware and Software Resources}
+
+\subsection{Hardware Components}
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{ll}
+\toprule
+\textbf{Component} & \textbf{Role} \\
+\midrule
+ESP32 & Main MCU, WiFi, GPIO \\
+KY-003 Hall Magnetic Field Sensor & Oscillation detector \\
+Oscillating magnet (pendulum) & Mechanical seismic transducer \\
+128×64 OLED screen & Local status display \\
+Spring / suspension wire & Mechanical pendulum assembly \\
+External battery / USB power & Power supply \\
+Enclosure / support & Physical mounting \\
+\bottomrule
+\end{tabular}
+\caption{Hardware bill of materials}
+\end{table}
+
+\subsection{Software Environment}
+\begin{itemize}[noitemsep]
+  \item \textbf{Language}: Lua 5.3.4 on LuaRTOS
+  \item \textbf{Modules}: \texttt{pio}, \texttt{net.wf}, \texttt{net.curl}, \texttt{tmr}, \texttt{thread}, \texttt{os}, \texttt{string}
+  \item \textbf{External API}: Telegram Bot API — \texttt{https://api.telegram.org/bot[TOKEN]/sendMessage}
+\end{itemize}
+
+% -------------------------------------------------------------------
+\section{Technical Details of the PoC}
+
+\subsection{System Architecture}
+
+The system operates in two layers:
+
+\begin{enumerate}[noitemsep]
+  \item \textbf{Sensor layer} (30--50 ms polling): reads the Hall pin, counts falling edges (magnet passes), evaluates the count every 3--7 seconds against thresholds.
+  \item \textbf{Communication layer} (async thread): picks up alert level from shared variable, constructs and sends HTTPS GET request to Telegram API, enforces 30-second anti-spam cooldown.
+\end{enumerate}
+
+\subsection{Detection Algorithm}
+
+\begin{lstlisting}[language=Lua, caption={Sensor thread core logic}]
+-- Analysis every 3 seconds
+if os.time() - start_time >= 3 then
+    if detections >= 5 and not send_in_progress then
+        local level = "LOW"
+        if detections >= 10 then level = "MODERATE" end
+        if detections >= 20 then level = "HIGH"     end
+
+        -- Pass alert to Telegram thread
+        alert_level        = level
+        alert_oscillations = detections
+    end
+    detections = 0
+    start_time = os.time()
+end
+\end{lstlisting}
+
+\subsection{Alert Thresholds}
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{lll}
+\toprule
+\textbf{Parameter} & \textbf{Value} & \textbf{Justification} \\
+\midrule
+Min threshold $S_{min}$ & 5 oscillations / 3 s & Below = electrical rebound noise \\
+Max threshold $S_{max}$ & 40 oscillations / s & Above = industrial fans (50--60 Hz) \\
+Confirmation duration & 3 s & Isolates single shock vs sustained seism \\
+Analysis cycle & 7 s (debug) / 3 s (prod) & Balances latency and CPU load \\
+Anti-spam cooldown & 30 s minimum & Prevents 10+ messages for one event \\
+\bottomrule
+\end{tabular}
+\caption{Detection parameter justification}
+\end{table}
+
+\subsection{Noise vs Real Event Discrimination}
+
+\begin{itemize}[noitemsep]
+  \item \textbf{Object falling on table} (noise): peak of 50 fronts/s for 0.2 s → filtered ($> S_{max}$), then immediate silence
+  \item \textbf{Seismic event} (real): 8--15 fronts/s for 5--10 s continuously → confirmed, chaotic pattern
+  \item \textbf{Industrial motor at 50 Hz} (noise): constant 50 fronts/s for hours → filtered ($> S_{max}$)
+\end{itemize}
+
+\subsection{Security Analysis}
+
+The Telegram alert travels in plaintext over WiFi. Identified risks and mitigations:
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{p{3.5cm}p{4cm}p{5.5cm}}
+\toprule
+\textbf{Threat} & \textbf{Risk} & \textbf{Mitigation} \\
+\midrule
+Replay attack & Attacker resends captured message & Sequence number counter (16-bit) \\
+Message forgery & Fake alert injected & HMAC-SHA256 signature (requires porting crypto lib) \\
+Token exposure & Firmware extraction → bot abuse & Store in encrypted EEPROM; revoke after demo \\
+WPA2 interception & Token visible in cleartext & Enforce WPA3; add VPN (heavy for ESP32) \\
+\bottomrule
+\end{tabular}
+\caption{Security threat matrix}
+\end{table}
+
+Sequence number anti-replay (Lua pseudocode):
+\begin{lstlisting}[language=Lua, caption={Anti-replay sequence counter}]
+local sequence = 0
+function send_alert(level, count)
+    sequence = (sequence + 1) % 65536
+    local msg = level .. "|" .. count .. "|" .. sequence
+    -- Server-side: reject if sequence <= last_seen_sequence
+end
+\end{lstlisting}
+
+% -------------------------------------------------------------------
+\section{Limitations}
+
+\subsection{Physical Limitations}
+\begin{itemize}[noitemsep]
+  \item \textbf{Single-axis}: Hall sensor detects only vertical movement. Lateral tremors (East-West, North-South) are missed — 66\% sensitivity reduction for horizontal seismic waves. Mitigation: add 2 additional Hall sensors on perpendicular axes.
+  \item \textbf{No amplitude measurement}: binary detection (0/1). Richter scale approximated to 3 levels only.
+\end{itemize}
+
+\subsection{Network Limitations}
+\begin{itemize}[noitemsep]
+  \item \textbf{WiFi dependency}: no Telegram notification if WiFi goes down.
+  \item \textbf{Telegram latency}: HTTP REST adds 2--5 s. Acceptable since seismic events last 10--30 s.
+\end{itemize}
+
+\subsection{Operational Limitations}
+\begin{itemize}[noitemsep]
+  \item \textbf{No distributed consensus}: a single node vibrating triggers a global alert. Door slam in one room → all admins notified. Mitigation: require $N$ of $M$ nodes to agree before sending.
+  \item \textbf{Rate limiting}: 10+ nodes sending simultaneously risk hitting Telegram's 30 msg/s global limit. Mitigation: aggregate into one message (\texttt{Node1:OK|Node2:ALERT|Node3:OK}).
+\end{itemize}
+
+% -------------------------------------------------------------------
+\section{Conclusion}
+
+This PoC validates the core feasibility of an ESP32-based seismic monitoring system at minimal cost. The dual-thread architecture successfully decouples latency-sensitive sensor polling from blocking network I/O. The threshold-based classifier provides acceptable noise discrimination for a data-center deployment scenario. The primary gap remains mechanical: a single-axis, frequency-only sensor cannot produce a calibrated Richter magnitude. This would require a tri-axis MEMS accelerometer (e.g., MPU-6050) as a hardware upgrade path.
+
+\end{document}
